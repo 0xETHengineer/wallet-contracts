@@ -84,7 +84,7 @@
   },
   "dependencies": {
     "@typechain/ethers-v5": "^7.0.1",
-    "ethers": "^5.7.2",
+    "ethers": "^6.0.0",
     "keccak256": "^1.0.6"
   }
 }
