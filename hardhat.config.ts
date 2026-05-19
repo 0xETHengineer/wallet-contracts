@@ -1,14 +1,19 @@
-import { HardhatUserConfig } from 'hardhat/config'
+import { HardhatUserConfig, task } from 'hardhat/config'
 import { networkConfig } from './utils/config-loader'
 
 import '@nomiclabs/hardhat-truffle5'
 import '@nomiclabs/hardhat-ethers'
 import '@nomiclabs/hardhat-web3'
 import '@nomiclabs/hardhat-etherscan'
-import "@tenderly/hardhat-tenderly"
 
 import 'hardhat-gas-reporter'
 import 'solidity-coverage'
+
+import './utils/benchmarker'
+
+import * as tdly from "@tenderly/hardhat-tenderly"
+
+tdly.setup()
 
 const ganacheNetwork = {
   url: 'http://127.0.0.1:8545',
@@ -17,20 +22,13 @@ const ganacheNetwork = {
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: '0.7.6',
+    version: '0.8.17',
     settings: {
       optimizer: {
         enabled: true,
-        runs: 999999,
-        details: {
-          yul: true
-        }
+        runs: 500000
       }
     }
-  },
-  paths: {
-    root: 'src',
-    tests: '../tests'
   },
   networks: {
     mainnet: networkConfig('mainnet'),
@@ -45,6 +43,9 @@ const config: HardhatUserConfig = {
     ganache: ganacheNetwork,
     coverage: {
       url: 'http://localhost:8555'
+    },
+    hardhat: {
+      blockGasLimit: 60000000
     }
   },
   etherscan: {

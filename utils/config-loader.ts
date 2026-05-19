@@ -32,14 +32,17 @@ export const networkRpcUrl = (network: EthereumNetworksTypes): string => {
   const config = getEnvConfig('PROD')
 
   switch (network) {
+    case 'rinkeby':
+      return 'https://rpc.ankr.com/eth_rinkeby'
+
     case 'mumbai':
       return 'https://rpc-mumbai.matic.today/'
 
     case 'matic':
-      return 'https://nodes.sequence.app/matic'
+      return 'https://polygon-rpc.com'
 
     case 'arbitrum-testnet':
-      return 'https://rinkeby.arbitrum.io/rpc'
+      return 'https://sepolia-rollup.arbitrum.io/rpc'
     
     case 'arbitrum':
       return 'https://arb1.arbitrum.io/rpc'
@@ -91,7 +94,8 @@ export const networkConfig = (network: EthereumNetworksTypes): HttpNetworkConfig
       mnemonic: config['ETH_MNEMONIC'],
       initialIndex: 0,
       count: 10,
-      path: `m/44'/60'/0'/0`
+      path: `m/44'/60'/0'/0`,
+      passphrase: ''
     },
     gas: 'auto',
     gasPrice: 'auto',
