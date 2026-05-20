@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.16;
+pragma solidity 0.8.18;
 
 import "../utils/LibBytesPointer.sol";
 
@@ -24,6 +24,16 @@ contract LibBytesPointerImpl {
     uint256 newPointer
   ) {
     return LibBytesPointer.readUint16(data, index);
+  }
+
+  function readUint24(
+    bytes calldata data,
+    uint256 index
+  ) external pure returns (
+    uint24 a,
+    uint256 newPointer
+  ) {
+    return LibBytesPointer.readUint24(data, index);
   }
 
   function readUint64(

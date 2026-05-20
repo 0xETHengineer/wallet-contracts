@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.16;
+pragma solidity 0.8.17;
 pragma experimental ABIEncoderV2;
 
 import "../utils/SignatureValidator.sol";
@@ -8,10 +8,10 @@ import "./commons/Implementation.sol";
 import "./commons/ModuleAuthFixed.sol";
 import "./commons/ModuleHooks.sol";
 import "./commons/ModuleCalls.sol";
-import "./commons/ModuleUpdate.sol";
 import "./commons/ModuleCreator.sol";
 import "./commons/ModuleExtraAuth.sol";
 import "./commons/ModuleStaticAuth.sol";
+import "./commons/ModuleAuthConvenience.sol";
 
 import "../interfaces/receivers/IERC1155Receiver.sol";
 import "../interfaces/receivers/IERC721Receiver.sol";
@@ -31,16 +31,15 @@ contract MainModule is
   ModuleStaticAuth,
   ModuleCalls,
   ModuleHooks,
-  ModuleCreator
+  ModuleCreator,
+  ModuleAuthConvenience
 {
   constructor(
     address _factory,
-    address _mainModuleUpgradable,
-    address _self
+    address _mainModuleUpgradable
   ) ModuleAuthFixed(
     _factory,
-    _mainModuleUpgradable,
-    _self
+    _mainModuleUpgradable
   ) { }
 
   function _isValidImage(

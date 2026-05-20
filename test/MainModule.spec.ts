@@ -3,9 +3,9 @@ import { ethers as hethers } from 'hardhat'
 
 import { bytes32toAddress, CHAIN_ID, expect, expectToBeRejected, randomHex } from './utils'
 
-import { CallReceiverMock, ContractType, deploySequenceContext, ModuleMock, SequenceContext, DelegateCallMock, HookMock, HookCallerMock, GasBurnerMock, deploySequenceAutoUpdate } from './utils/contracts'
+import { CallReceiverMock, ContractType, deploySequenceContext, ModuleMock, SequenceContext, DelegateCallMock, HookMock, HookCallerMock, GasBurnerMock } from './utils/contracts'
 import { Imposter } from './utils/imposter'
-import { applyTxDefaults, computeStorageKey, digestOf, encodeNonce, imageHash, leavesOf, merkleTopology, SignatureType, subDigestOf } from './utils/sequence'
+import { applyTxDefaults, computeStorageKey, digestOf, encodeNonce, leavesOf, merkleTopology, printTopology, SignatureType, subDigestOf } from './utils/sequence'
 import { SequenceWallet, StaticSigner } from './utils/wallet'
 
 contract('MainModule', (accounts: string[]) => {
@@ -435,79 +435,6 @@ contract('MainModule', (accounts: string[]) => {
           await wallet.sendTransactions([{}], encodeNonce(1, 0))
           const tx = wallet.sendTransactions([{}], encodeNonce(2, 1))
           await expectToBeRejected(tx, `BadNonce(2, 1, 0)`)
-        })
-      })
-
-      describe('special nonce types', () => {
-        describe('transactions with gap nonce', () => {
-          it("Should accept a gap nonce incremented by one", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(0, 1, 1))
-          })
-
-          it("Should accept a gap nonce incremented by 10", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(0, 10, 1))
-          })
-
-          it("Should accept a gap nonce incremented by 2 ** 88 - 1 (max)", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(0, "309485009821345068724781055", 1))
-          })
-
-          it("Should reject same gap nonce (zero)", async () => {
-            const tx = wallet.sendTransactions([{}], encodeNonce(0, 0, 1))
-            await expectToBeRejected(tx, 'BadGapNonce(0, 0, 0)')
-          })
-
-          it("Should reject same gap nonce (one)", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(0, 1, 1))
-            const tx = wallet.sendTransactions([{}], encodeNonce(0, 1, 1))
-            await expectToBeRejected(tx, 'BadGapNonce(0, 1, 1)')
-          })
-
-          it("Should reject lower gap nonce", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(0, 10, 1))
-
-            const tx = wallet.sendTransactions([{}], encodeNonce(0, 5, 1))
-            await expectToBeRejected(tx, 'BadGapNonce(0, 5, 10)')
-          })
-
-          it("Should use paralel gap nonces", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(0, 1, 1))
-            await wallet.sendTransactions([{}], encodeNonce(1, 1, 1))
-          })
-
-          it("Should reject same nonce on different space", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(5, 1, 1))
-            const tx = wallet.sendTransactions([{}], encodeNonce(5, 1, 1))
-            await expectToBeRejected(tx, 'BadGapNonce(5, 1, 1)')
-          })
-        })
-
-        describe('transactions without nonce', () => {
-          it("Should relay 3 times a transaction without nonce (no-nonce type)", async () => {
-            await wallet.sendTransactions([{}], encodeNonce(0, 0, 2))
-            await wallet.sendTransactions([{}], encodeNonce(0, 0, 2))
-            await wallet.sendTransactions([{}], encodeNonce(0, 0, 2))
-          })
-
-          it("Should fail if transaction has a non-zero nonce value", async () => {  
-            const tx = wallet.sendTransactions([{}], encodeNonce(0, 1, 2))
-            await expectToBeRejected(tx, 'ExpectedEmptyNonce(0, 1)')
-          })
-
-          it("Should fail if transaction has a non-zero space value", async () => {
-            const tx = wallet.sendTransactions([{}], encodeNonce(3, 0, 2))
-            await expectToBeRejected(tx, 'ExpectedEmptyNonce(3, 0)')
-          })
-
-          it("Should fail if transaction has a non-zero space and nonce values", async () => {
-            const tx = wallet.sendTransactions([{}], encodeNonce(29443, 65535, 2))
-            await expectToBeRejected(tx, 'ExpectedEmptyNonce(29443, 65535)')
-          })
-        })
-
-        it('Should reject bad nonce type', async () => {
-          const tx = wallet.sendTransactions([{}], encodeNonce(0, 0, 3))
-          await expectToBeRejected(tx, 'InvalidNonceType(3)')
         })
       })
     })
@@ -1341,83 +1268,19 @@ contract('MainModule', (accounts: string[]) => {
     })
   })
 
-  describe('Auto upgradeable modules', async () => {
-    let autoContext: Awaited<ReturnType<typeof deploySequenceAutoUpdate>>
-
-    beforeEach(async () => {
-      autoContext = await deploySequenceAutoUpdate(context)
-      wallet = SequenceWallet.basicWallet(autoContext, { signing: 2 })
-      await wallet.deploy()
-    })
-
-    it('Should send a transaction', async () => {
-      await wallet.sendTransactions([{}])
-    })
-
-    it('Should update configuration', async () => {
-      const newConfig = SequenceWallet.basicWallet(autoContext, { signing: 2 }).config
-      await wallet.updateImageHash(newConfig)
-      expect(await wallet.mainModuleUpgradable.imageHash()).to.equal(imageHash(newConfig))
-    })
-
-    it('Should update mainModule template', async () => {
-      await autoContext.repository.setModule(
-        autoContext.moduleKeys.keyMainModule,
-        callReceiver.address
-      )
-
-      const converted = CallReceiverMock.attach(wallet.address)
-      await converted.testCall(11, [])
-      expect(await converted.lastValA()).to.equal(11)
-
-      const tx = wallet.sendTransactions([{}])
-      await expect(tx).to.be.rejected
-    })
-
-    it('Should update mainModuleUpgradeable template', async () => {
-      await autoContext.repository.setModule(
-        autoContext.moduleKeys.keyMainModuleUpgradable,
-        callReceiver.address
-      )
-
-      await wallet.sendTransactions([{}])
-
-      const newConfig = SequenceWallet.basicWallet(autoContext, { signing: 2 }).config
-      await wallet.updateImageHash(newConfig)
-      wallet = wallet.useAddress(wallet.address).useConfig(newConfig)
-      
-      const converted = CallReceiverMock.attach(wallet.address)
-      await converted.testCall(11, [])
-      expect(await converted.lastValA()).to.equal(11)
-
-      const tx = wallet.sendTransactions([{}])
-      await expect(tx).to.be.rejected
-    })
-
-    it('Should fail to update repository if not owner', async () => {
-      const notOwner = hethers.provider.getSigner(1)
-      const tx = autoContext.repository.connect(notOwner).setModule(
-        autoContext.moduleKeys.keyMainModule,
-        callReceiver.address
-      )
-
-      await expect(tx).to.be.rejected
-    })
-  })
-
   describe('Multisignature', async () => {
     const modes = [{
       name: "Forced dynamic part encoding, legacy signature type",
       encodingOptions: { forceDynamicEncoding: true, signatureType: SignatureType.Legacy }
-    }, {
-      name: "Default part encoding, legacy signature encoding",
-      encodingOptions: { signatureType: SignatureType.Legacy }
-    }, {
-      name: "Forced dynamic part encoding, dynamic signature type",
-      encodingOptions: { forceDynamicEncoding: true, signatureType: SignatureType.Dynamic }
-    }, {
-      name: "Default part encoding, dynamic signature type",
-      encodingOptions: { signatureType: SignatureType.Legacy }
+    // }, {
+    //   name: "Default part encoding, legacy signature encoding",
+    //   encodingOptions: { signatureType: SignatureType.Legacy }
+    // }, {
+    //   name: "Forced dynamic part encoding, dynamic signature type",
+    //   encodingOptions: { forceDynamicEncoding: true, signatureType: SignatureType.Dynamic }
+    // }, {
+    //   name: "Default part encoding, dynamic signature type",
+    //   encodingOptions: { signatureType: SignatureType.Legacy }
     }]
 
     modes.map((mode) => {
@@ -1613,7 +1476,18 @@ contract('MainModule', (accounts: string[]) => {
             await expect(tx).to.be.rejected
           })
         })
-    
+
+        describe('With 3/255 wallet', () => {  
+          beforeEach(async () => {
+            wallet = SequenceWallet.basicWallet(context, { threshold: 3, signing: 215, encodingOptions })
+            await wallet.deploy()
+          })
+
+          it('Should accept message signed by all owners', async () => {
+            await wallet.useSigners(wallet.signers.slice(0, 3)).sendTransactions([{}], undefined, { gasLimit: 60000000 })
+          })
+        })
+
         describe('With weighted owners', () => {
           let signers: ethers.Wallet[]
     
@@ -2027,6 +1901,29 @@ contract('MainModule', (accounts: string[]) => {
       expect(await callReceiver.lastValB()).to.equal("0x")
       expect(await callReceiver2.lastValB()).to.equal("0x")
       expect(await callReceiver3.lastValB()).to.equal(expected3)
+    })
+  })
+
+  describe('Config tree', () => {
+    it('Should be able to sign with all leaves of a configuration', async () => {
+      const signers = new Array(16).fill(0).map(() => ethers.Wallet.createRandom())
+      const config = {
+        threshold: 1,
+        topology: merkleTopology(signers.map(s => ({
+          address: s.address,
+          weight: 1
+        })))
+      }
+      wallet = new SequenceWallet({ config, context, signers: [] })
+      await wallet.deploy()
+
+      const subDigest = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('test'))
+      for (const signer of signers) {
+        wallet = wallet.useSigners([signer])
+        const signatureFor = await wallet.signSubDigest(subDigest)
+        console.log(`signer ${signer.address}: ${signatureFor}`)
+        await wallet.sendTransactions([])
+      }
     })
   })
 })

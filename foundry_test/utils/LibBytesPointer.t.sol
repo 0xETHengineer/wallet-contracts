@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.16;
+pragma solidity 0.8.18;
 
 import "contracts/utils/LibBytes.sol";
 import "contracts/utils/LibBytesPointer.sol";
@@ -24,6 +24,10 @@ contract LibBytesPointerImp {
 
   function readUint16(bytes calldata _data, uint256 _index) external pure returns (uint16, uint256) {
     return _data.readUint16(_index);
+  }
+
+  function readUint24(bytes calldata _data, uint256 _index) external pure returns (uint24, uint256) {
+    return _data.readUint24(_index);
   }
 
   function readUint64(bytes calldata _data, uint256 _index) external pure returns (uint64, uint256) {
@@ -84,6 +88,18 @@ contract LibBytesPointerTest is AdvTest {
   function test_readUint16_OutOfBounds(bytes calldata _data, uint256 _pointer) external {
     (, uint256 newPointer) = lib.readUint16(_data, _pointer);
     unchecked { assertEq(newPointer, _pointer + 2); }
+  }
+
+  function test_readUint24(bytes calldata _prefix, uint24 _data, bytes calldata _sufix) external {
+    bytes memory combined = abi.encodePacked(_prefix, _data, _sufix);
+    (uint256 actual, uint256 newPointer) = lib.readUint24(combined, _prefix.length);
+    assertEq(actual, _data);
+    assertEq(newPointer, _prefix.length + 3);
+  }
+
+  function test_readUint24_OutOfBounds(bytes calldata _data, uint256 _pointer) external {
+    (, uint256 newPointer) = lib.readUint24(_data, _pointer);
+    unchecked { assertEq(newPointer, _pointer + 3); }
   }
 
   function test_readUint64(bytes calldata _prefix, uint64 _data, bytes calldata _sufix) external {

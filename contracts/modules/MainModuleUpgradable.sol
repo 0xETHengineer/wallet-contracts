@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.16;
+pragma solidity 0.8.17;
 pragma experimental ABIEncoderV2;
 
 import "./commons/ModuleAuthUpgradable.sol";
@@ -9,6 +9,7 @@ import "./commons/ModuleUpdate.sol";
 import "./commons/ModuleCreator.sol";
 import "./commons/ModuleExtraAuth.sol";
 import "./commons/ModuleStaticAuth.sol";
+import "./commons/ModuleAuthConvenience.sol";
 
 
 /**
@@ -25,7 +26,8 @@ contract MainModuleUpgradable is
   ModuleCalls,
   ModuleUpdate,
   ModuleHooks,
-  ModuleCreator
+  ModuleCreator,
+  ModuleAuthConvenience
 {
   function _isValidImage(
     bytes32 _imageHash
