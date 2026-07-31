@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.14;
+pragma solidity 0.8.18;
 
 import "../../utils/LibBytes.sol";
-import "../../utils/SignatureValidator.sol";
 import "../../interfaces/IERC1271Wallet.sol";
 
 import "./interfaces/IModuleAuth.sol";
@@ -23,14 +22,27 @@ abstract contract ModuleAuth is
 {
   using LibBytes for bytes;
 
-  bytes1 private constant LEGACY_TYPE = hex"00";
-  bytes1 private constant DYNAMIC_TYPE = hex"01";
-  bytes1 private constant NO_CHAIN_ID_TYPE = hex"02";
-  bytes1 private constant CHAINED_TYPE = hex"03";
+  bytes1 internal constant LEGACY_TYPE = hex"00";
+  bytes1 internal constant DYNAMIC_TYPE = hex"01";
+  bytes1 internal constant NO_CHAIN_ID_TYPE = hex"02";
+  bytes1 internal constant CHAINED_TYPE = hex"03";
 
-  bytes4 private constant SELECTOR_ERC1271_BYTES_BYTES = 0x20c13b0b;
-  bytes4 private constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
+  bytes4 internal constant SELECTOR_ERC1271_BYTES_BYTES = 0x20c13b0b;
+  bytes4 internal constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
 
+  /**
+   * @notice Recovers the threshold, weight, imageHash, subdigest, and checkpoint of a signature.
+   * @dev The signature must be prefixed with a type byte, which is used to determine the recovery method.
+   *
+   * @param _digest Digest of the signed data.
+   * @param _signature A Sequence signature.
+   *
+   * @return threshold The required number of signatures needed to consider the signature valid.
+   * @return weight The actual number of signatures collected in the signature.
+   * @return imageHash The imageHash of the configuration that signed the message.
+   * @return subdigest A modified version of the original digest, unique for each wallet/network.
+   * @return checkpoint A nonce that is incremented every time a new configuration is set.
+   */
   function signatureRecovery(
     bytes32 _digest,
     bytes calldata _signature
@@ -38,66 +50,60 @@ abstract contract ModuleAuth is
     uint256 threshold,
     uint256 weight,
     bytes32 imageHash,
-    bytes32 subDigest
+    bytes32 subdigest,
+    uint256 checkpoint
   ) {
     bytes1 signatureType = _signature[0];
 
     if (signatureType == LEGACY_TYPE) {
       // networkId digest + base recover
-      subDigest = SequenceBaseSig.subDigest(_digest);
-      (threshold, weight, imageHash) = SequenceBaseSig.recover(subDigest, _signature);
-      return (threshold, weight, imageHash, subDigest);
+      subdigest = SequenceBaseSig.subdigest(_digest);
+      (threshold, weight, imageHash, checkpoint) = SequenceBaseSig.recover(subdigest, _signature);
+      return (threshold, weight, imageHash, subdigest, checkpoint);
     }
 
     if (signatureType == DYNAMIC_TYPE) {
-      // noChainId digest + dynamic recovery
-      subDigest = SequenceBaseSig.subDigest(_digest);
-      (threshold, weight, imageHash) = SequenceDynamicSig.recover(subDigest, _signature);
-      return (threshold, weight, imageHash, subDigest);
+      // networkId digest + dynamic recover
+      subdigest = SequenceBaseSig.subdigest(_digest);
+      (threshold, weight, imageHash, checkpoint) = SequenceDynamicSig.recover(subdigest, _signature);
+      return (threshold, weight, imageHash, subdigest, checkpoint);
     }
 
     if (signatureType == NO_CHAIN_ID_TYPE) {
-      // networkId digest + dynamic recover
-      subDigest = SequenceNoChainIdSig.subDigest(_digest);
-      (threshold, weight, imageHash) = SequenceDynamicSig.recover(subDigest, _signature);
-      return (threshold, weight, imageHash, subDigest);
+      // noChainId digest + dynamic recover
+      subdigest = SequenceNoChainIdSig.subdigest(_digest);
+      (threshold, weight, imageHash, checkpoint) = SequenceDynamicSig.recover(subdigest, _signature);
+      return (threshold, weight, imageHash, subdigest, checkpoint);
     }
 
     if (signatureType == CHAINED_TYPE) {
       // original digest + chained recover
-      // (subdigest will be computed in the chained recovery)
+      // (subdigest will be computed in the chained recover)
       return chainedRecover(_digest, _signature);
     }
 
     revert InvalidSignatureType(signatureType);
   }
 
+  /**
+   * @dev Validates a signature.
+   *
+   * @param _digest Digest of the signed data.
+   * @param _signature A Sequence signature.
+   *
+   * @return isValid Indicates whether the signature is valid or not.
+   * @return subdigest A modified version of the original digest, unique for each wallet/network.
+   */
   function _signatureValidation(
     bytes32 _digest,
     bytes calldata _signature
   ) internal override virtual view returns (
     bool isValid,
-    bytes32 subDigest
+    bytes32 subdigest
   ) {
     uint256 threshold; uint256 weight; bytes32 imageHash;
-    (threshold, weight, imageHash, subDigest) = signatureRecovery(_digest, _signature);
+    (threshold, weight, imageHash, subdigest,) = signatureRecovery(_digest, _signature);
     isValid = weight >= threshold && _isValidImage(imageHash);
-  }
-
-  /**
-   * @notice Will hash _data to be signed (similar to EIP-712)
-   * @param _digest Pre-final digest
-   * @return hashed data for this wallet
-   */
-  function _subDigest(bytes32 _digest, uint256 _chainId) internal override virtual view returns (bytes32) {
-    return keccak256(
-      abi.encodePacked(
-        "\x19\x01",
-        _chainId,
-        address(this),
-        _digest
-      )
-    );
   }
 
   /**
@@ -112,12 +118,14 @@ abstract contract ModuleAuth is
   function isValidSignature(
     bytes calldata _data,
     bytes calldata _signatures
-  ) external override virtual view returns (bytes4) {
+  ) public override virtual view returns (bytes4) {
     // Validate signatures
     (bool isValid,) = _signatureValidation(keccak256(_data), _signatures);
     if (isValid) {
       return SELECTOR_ERC1271_BYTES_BYTES;
     }
+
+    return bytes4(0);
   }
 
   /**
@@ -132,12 +140,14 @@ abstract contract ModuleAuth is
   function isValidSignature(
     bytes32 _hash,
     bytes calldata _signatures
-  ) external override virtual view returns (bytes4) {
+  ) public override virtual view returns (bytes4) {
     // Validate signatures
     (bool isValid,) = _signatureValidation(_hash, _signatures);
     if (isValid) {
       return SELECTOR_ERC1271_BYTES32_BYTES;
     }
+
+    return bytes4(0);
   }
 
   /**
@@ -154,5 +164,13 @@ abstract contract ModuleAuth is
     }
 
     return super.supportsInterface(_interfaceID);
+  }
+
+  /**
+   * @notice Updates the signers configuration of the wallet
+   * @param _imageHash New required image hash of the signature
+   */
+  function updateImageHash(bytes32 _imageHash) external override virtual onlySelf {
+    _updateImageHash(_imageHash);
   }
 }

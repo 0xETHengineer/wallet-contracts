@@ -6,7 +6,7 @@ import { SequenceWallet } from './utils/wallet'
 const optimalGasLimit = ethers.constants.Two.pow(22)
 const runs = 256
 
-function report(test: string, values: ethers.BigNumberish[]) {
+function report2(values: ethers.BigNumberish[]) {
   const bns = values.map(v => ethers.BigNumber.from(v))
 
   const min = bns.reduce((a, b) => a.lt(b) ? a : b)
@@ -15,6 +15,11 @@ function report(test: string, values: ethers.BigNumberish[]) {
     .reduce((p, n) => p.add(n))
     .div(values.length)
 
+  return { min, max, avg }
+}
+
+function report(test: string, values: ethers.BigNumberish[]) {
+  const { min, max, avg } = report2(values)
   console.info(` -> ${test} runs: ${values.length} cost min: ${min.toString()} max: ${max.toString()} avg: ${avg.toString()}`)
 }
 
@@ -67,7 +72,7 @@ contract('MainModule', () => {
             gasLimit: optimalGasLimit,
             target: ethers.constants.AddressZero,
             value: ethers.constants.Zero,
-            data: []
+            data: "0x0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12e0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12e"
           }))
 
           for (let i = 0; i < runs; i++) {
@@ -136,7 +141,7 @@ contract('MainModule', () => {
         const results: ethers.BigNumberish[] = []
 
         for (let i = 0; i < runs; i++) {
-          const wallet = SequenceWallet.basicWallet(context, { signing: [3, 1], iddle: [1, 1, 3], threshold: 4 })
+          const wallet = SequenceWallet.basicWallet(context, { signing: [3, 1], idle: [1, 1, 3], threshold: 4 })
           await wallet.deploy()
           const tx = await wallet.sendTransactions([transaction])
           const receipt = await tx.wait()
@@ -151,10 +156,10 @@ contract('MainModule', () => {
         const results: ethers.BigNumberish[] = []
 
         for (let i = 0; i < runs; i++) {
-          const wallet = SequenceWallet.basicWallet(context, { signing: 255, iddle: 0, threshold: 255 })
+          const wallet = SequenceWallet.basicWallet(context, { signing: 255, idle: 0, threshold: 255 })
           await wallet.deploy()
 
-          const tx = await wallet.sendTransactions([transaction], undefined, { gasLimit: 90000000 })
+          const tx = await wallet.sendTransactions([transaction], undefined, { gasLimit: 60000000 })
           const receipt = await tx.wait()
 
           results.push(receipt.gasUsed)

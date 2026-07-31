@@ -1,35 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.14;
-pragma experimental ABIEncoderV2;
+pragma solidity 0.8.18;
 
-import "../utils/SignatureValidator.sol";
+import "../utils/LibOptim.sol";
 
-import "./commons/Implementation.sol";
+import "./commons/submodules/auth/SequenceBaseSig.sol";
+
 import "./commons/ModuleAuth.sol";
-import "./commons/ModuleHooks.sol";
 import "./commons/ModuleCalls.sol";
-import "./commons/ModuleUpdate.sol";
 import "./commons/ModuleCreator.sol";
-
-import "../interfaces/receivers/IERC1155Receiver.sol";
-import "../interfaces/receivers/IERC721Receiver.sol";
-
-import "../interfaces/IERC1271Wallet.sol";
 
 
 /**
- * GuestModule implements an Arcadeum wallet without signatures, nonce or replay protection.
+ * GuestModule implements a Sequence wallet without signatures, nonce or replay protection.
  * executing transactions using this wallet is not an authenticated process, and can be done by any address.
  *
  * @notice This contract is completely public with no security, designed to execute pre-signed transactions
- *   and use Arcadeum tools without using the wallets.
+ *   and use Sequence tools without using the wallets.
  */
 contract GuestModule is
   ModuleAuth,
   ModuleCalls,
   ModuleCreator
 {
-  error DelegateCallNotAllowed();
+  error DelegateCallNotAllowed(uint256 _index);
   error NotSupported();
 
   /**
@@ -37,12 +30,12 @@ contract GuestModule is
    * @param _txs Transactions to process
    */
   function execute(
-    Transaction[] memory _txs,
+    Transaction[] calldata _txs,
     uint256,
     bytes calldata
   ) public override {
     // Hash transaction bundle
-    bytes32 txHash = _subDigest(keccak256(abi.encode('guest:', _txs)), block.chainid);
+    bytes32 txHash = SequenceBaseSig.subdigest(keccak256(abi.encode('guest:', _txs)));
 
     // Execute the transactions
     _executeGuest(txHash, _txs);
@@ -53,10 +46,10 @@ contract GuestModule is
    * @param _txs Transactions to process
    */
   function selfExecute(
-    Transaction[] memory _txs
+    Transaction[] calldata _txs
   ) public override {
     // Hash transaction bundle
-    bytes32 txHash = _subDigest(keccak256(abi.encode('self:', _txs)), block.chainid);
+    bytes32 txHash = SequenceBaseSig.subdigest(keccak256(abi.encode('self:', _txs)));
 
     // Execute the transactions
     _executeGuest(txHash, _txs);
@@ -69,45 +62,50 @@ contract GuestModule is
    */
   function _executeGuest(
     bytes32 _txHash,
-    Transaction[] memory _txs
+    Transaction[] calldata _txs
   ) private {
     // Execute transaction
-    for (uint256 i = 0; i < _txs.length; i++) {
-      Transaction memory transaction = _txs[i];
+    uint256 size = _txs.length;
+    for (uint256 i = 0; i < size; i++) {
+      Transaction calldata transaction = _txs[i];
 
-      bool success;
-      bytes memory result;
+      if (transaction.delegateCall) revert DelegateCallNotAllowed(i);
 
-      if (transaction.delegateCall) revert DelegateCallNotAllowed();
-      if (gasleft() < transaction.gasLimit) revert NotEnoughGas(transaction.gasLimit, gasleft());
+      uint256 gasLimit = transaction.gasLimit;
+      if (gasleft() < gasLimit) revert NotEnoughGas(i, gasLimit, gasleft());
 
-      // solhint-disable
-      (success, result) = transaction.target.call{
-        value: transaction.value,
-        gas: transaction.gasLimit == 0 ? gasleft() : transaction.gasLimit
-      }(transaction.data);
-      // solhint-enable
+      bool success = LibOptim.call(
+        transaction.target,
+        transaction.value,
+        gasLimit == 0 ? gasleft() : gasLimit,
+        transaction.data
+      );
 
       if (success) {
-        emit TxExecuted(_txHash);
+        emit TxExecuted(_txHash, i);
       } else {
-        _revertBytes(transaction, _txHash, result);
+        _revertBytes(
+          transaction.revertOnError,
+          _txHash,
+          i,
+          LibOptim.returnData()
+        );
       }
     }
   }
 
   /**
-   * @notice Validates any signature image, because the wallet is public and has now owner.
+   * @notice Validates any signature image, because the wallet is public and has no owner.
    * @return true, all signatures are valid.
    */
-  function _isValidImage(bytes32) internal override view returns (bool) {
+  function _isValidImage(bytes32) internal override pure returns (bool) {
     return true;
   }
 
   /**
    * Not supported.
    */
-  function updateImageHash(bytes32) external override virtual onlySelf {
+  function _updateImageHash(bytes32) internal override virtual {
     revert NotSupported();
   }
 

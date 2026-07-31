@@ -2,7 +2,7 @@ import * as ethers from 'ethers'
 import { expect } from './utils'
 
 import { CallReceiverMock, ContractType, deploySequenceContext, GasEstimator, GuestModule, ModuleMock, SequenceContext, MainModuleGasEstimation, MainModule } from './utils/contracts'
-import { applyTxDefaults, Transaction } from './utils/sequence'
+import { applyTxDefaults, toSimplifiedConfig, Transaction } from './utils/sequence'
 import { SequenceWallet } from './utils/wallet'
 
 
@@ -38,7 +38,7 @@ contract('Estimate gas usage', () => {
   const estimateGasUsage = async (txs: Partial<Transaction>[], wallet: SequenceWallet, deploy: boolean = false, nonce: ethers.BigNumberish = 0) => {
     const stubSignature = await SequenceWallet.detailedWallet(context, {
       threshold: wallet.config.threshold,
-      signers: wallet.config.signers.map(() => ethers.Wallet.createRandom())
+      signers: toSimplifiedConfig(wallet.config).signers.map(() => ethers.Wallet.createRandom())
     }).signMessage(ethers.utils.randomBytes(32))
 
     const txData = wallet.mainModule.interface.encodeFunctionData('execute', [applyTxDefaults(txs), nonce, stubSignature])
@@ -173,16 +173,16 @@ contract('Estimate gas usage', () => {
           wallet = SequenceWallet.basicWallet(context, { signing: o.signers })
           await wallet.deploy()
         })
-  
+
         it('Should estimate single transaction', async () => {
           const transactions = [{
             target: callReceiver.address,
             data: callReceiver.interface.encodeFunctionData('testCall', [1, ethers.utils.hexlify(ethers.utils.randomBytes(299))])
           }]
-    
+
           const estimated = await estimateGasUsage(transactions, wallet)
           const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())
-  
+
           expect(estimated).to.approximately(gasUsed, 5000)
         })
 
@@ -194,10 +194,10 @@ contract('Estimate gas usage', () => {
             target: callReceiver.address,
             data: callReceiver.interface.encodeFunctionData('testCall', [1, ethers.utils.hexlify(ethers.utils.randomBytes(2299))])
           }]
-  
+
           const estimated = await estimateGasUsage(transactions, wallet)
-          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())  
-  
+          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())
+
           // TODO: The estimator overEstimates the gas usage due to the gas refund
           expect(gasUsed).to.be.below(estimated)
         })
@@ -210,10 +210,10 @@ contract('Estimate gas usage', () => {
             target: callReceiver.address,
             data: callReceiver.interface.encodeFunctionData('testCall', [1, ethers.utils.hexlify(ethers.utils.randomBytes(2299))])
           }]
-  
+
           const estimated = await estimateGasUsage(transactions, wallet, false, 999999999)
-          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())  
-  
+          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())
+
           // TODO: The estimator overEstimates the gas usage due to the gas refund
           expect(gasUsed).to.be.below(estimated)
         })
@@ -221,7 +221,7 @@ contract('Estimate gas usage', () => {
         it('Should estimate multiple transactions with failing transactions', async () => {
           const altCallReceiver = await CallReceiverMock.deploy()
           await altCallReceiver.setRevertFlag(true)
-  
+
           const transactions = [{
             target: callReceiver.address,
             data: callReceiver.interface.encodeFunctionData('testCall', [1, ethers.utils.hexlify(ethers.utils.randomBytes(299))])
@@ -233,10 +233,10 @@ contract('Estimate gas usage', () => {
             target: altCallReceiver.address,
             data: altCallReceiver.interface.encodeFunctionData('testCall', [1, ethers.utils.hexlify(ethers.utils.randomBytes(229))])
           }]
-  
+
           const estimated = await estimateGasUsage(transactions, wallet)
-          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())  
-  
+          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())
+
           // TODO: The estimator overEstimates the gas usage due to the gas refund
           expect(gasUsed).to.be.below(estimated)
         })
@@ -244,7 +244,7 @@ contract('Estimate gas usage', () => {
         it('Should estimate multiple transactions with failing transactions and fixed gas limits', async () => {
           const altCallReceiver = await CallReceiverMock.deploy()
           await altCallReceiver.setRevertFlag(true)
-  
+
           const transactions = [{
             target: callReceiver.address,
             data: callReceiver.interface.encodeFunctionData('testCall', [1, ethers.utils.hexlify(ethers.utils.randomBytes(299))])
@@ -257,10 +257,10 @@ contract('Estimate gas usage', () => {
             target: altCallReceiver.address,
             data: altCallReceiver.interface.encodeFunctionData('testCall', [1, ethers.utils.hexlify(ethers.utils.randomBytes(229))])
           }]
-  
+
           const estimated = await estimateGasUsage(transactions, wallet)
-          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())  
-  
+          const gasUsed = await wallet.sendTransactions(transactions).then((t) => t.wait()).then((r) => r.gasUsed.toNumber())
+
           // TODO: The estimator overEstimates the gas usage due to the gas refund
           expect(gasUsed).to.be.below(estimated)
         })
