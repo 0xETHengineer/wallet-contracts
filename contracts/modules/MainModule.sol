@@ -8,10 +8,10 @@ import "./commons/Implementation.sol";
 import "./commons/ModuleAuthFixed.sol";
 import "./commons/ModuleHooks.sol";
 import "./commons/ModuleCalls.sol";
-import "./commons/ModuleUpdate.sol";
 import "./commons/ModuleCreator.sol";
 import "./commons/ModuleExtraAuth.sol";
 import "./commons/ModuleStaticAuth.sol";
+import "./commons/ModuleAuthConvenience.sol";
 
 import "../interfaces/receivers/IERC1155Receiver.sol";
 import "../interfaces/receivers/IERC721Receiver.sol";
@@ -31,7 +31,8 @@ contract MainModule is
   ModuleStaticAuth,
   ModuleCalls,
   ModuleHooks,
-  ModuleCreator
+  ModuleCreator,
+  ModuleAuthConvenience
 {
   constructor(
     address _factory,
